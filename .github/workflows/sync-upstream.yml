@@ -20,6 +20,11 @@ jobs:
     # 运行环境：使用最新版本的 Ubuntu Linux
     runs-on: ubuntu-latest
     
+    # 权限配置
+    permissions:
+      contents: write      # 允许推送代码
+      pull-requests: write # 允许创建 PR
+    
     # 策略配置：定义如何运行多个任务实例
     strategy:
       # 矩阵策略：为每个分支创建一个独立的任务实例
@@ -87,6 +92,21 @@ jobs:
             
             # 输出成功消息
             echo "Successfully merged upstream/main into $BRANCH"
+            
+            # 检查是否有 workflow 文件的更改
+            if git diff --name-only HEAD~1 HEAD | grep -q "^\.github/workflows/"; then
+              echo "⚠️ Detected changes in .github/workflows/ directory"
+              echo "⚠️ Reverting workflow changes to avoid permission issues"
+              
+              # 恢复 workflow 文件到合并前的状态
+              git checkout HEAD~1 -- .github/workflows/ || true
+              
+              # 如果有更改，创建一个新的提交
+              if ! git diff --quiet; then
+                git add .github/workflows/
+                git commit -m "chore: revert workflow changes from upstream sync"
+              fi
+            fi
             
             # 将合并后的代码推送到你的 fork 仓库
             git push origin $BRANCH
