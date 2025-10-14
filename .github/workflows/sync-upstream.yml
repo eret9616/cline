@@ -1,0 +1,165 @@
+# Workflow 名称，会显示在 GitHub Actions 页面
+name: Sync Upstream
+
+# 触发条件：定义何时运行这个 workflow
+on:
+  # 定时触发：使用 cron 表达式
+  schedule:
+    # cron 格式：分 时 日 月 周
+    # '0 * * * *' 表示每小时的第 0 分钟运行（即整点运行）
+    # 例如：00:00, 01:00, 02:00, ..., 23:00
+    - cron: '0 * * * *'
+  
+  # 允许手动触发：在 GitHub Actions 页面可以手动运行
+  workflow_dispatch:
+
+# 定义要执行的任务
+jobs:
+  # 任务名称：sync
+  sync:
+    # 运行环境：使用最新版本的 Ubuntu Linux
+    runs-on: ubuntu-latest
+    
+    # 策略配置：定义如何运行多个任务实例
+    strategy:
+      # 矩阵策略：为每个分支创建一个独立的任务实例
+      matrix:
+        # 定义要同步的分支列表
+        branch:
+          - main  # 主分支
+          - feat/upgrade-vertex-sdk-for-global-endpoint-claude  # 功能分支
+      
+      # fail-fast: false 表示一个分支失败不会取消其他分支的执行
+      # 这样可以确保所有分支都会尝试同步，互不影响
+      fail-fast: false
+    
+    # 定义执行步骤
+    steps:
+      # 步骤 1：检出代码
+      - name: Checkout branch
+        # 使用 GitHub 官方的 checkout action（版本 4）
+        uses: actions/checkout@v4
+        with:
+          # 检出当前矩阵中的分支
+          ref: ${{ matrix.branch }}
+          
+          # 获取完整的 git 历史记录（而不是浅克隆）
+          # 这对于合并操作是必需的
+          fetch-depth: 0
+          
+          # 使用 GitHub 自动提供的 token 进行身份验证
+          # 这个 token 有权限推送到仓库
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      # 步骤 2：配置 Git 用户信息
+      - name: Configure Git
+        run: |
+          # 设置 Git 提交者名称为 GitHub Actions 机器人
+          git config user.name "github-actions[bot]"
+          
+          # 设置 Git 提交者邮箱
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      # 步骤 3：添加上游仓库并获取最新代码
+      - name: Add upstream remote
+        run: |
+          # 添加上游仓库为 remote（如果已存在则忽略错误）
+          # || true 表示即使命令失败也继续执行
+          git remote add upstream https://github.com/cline/cline.git || true
+          
+          # 从上游仓库获取最新的代码
+          git fetch upstream
+      
+      # 步骤 4：执行同步操作
+      - name: Sync with upstream
+        # 给这个步骤设置一个 ID，以便后续步骤引用
+        id: sync
+        run: |
+          # 将当前分支名保存到变量中
+          BRANCH="${{ matrix.branch }}"
+          
+          # 输出正在同步的分支名
+          echo "Syncing branch: $BRANCH"
+          
+          # 尝试合并上游的 main 分支
+          if git merge upstream/main --no-edit; then
+            # 如果合并成功（没有冲突）
+            
+            # 输出成功消息
+            echo "Successfully merged upstream/main into $BRANCH"
+            
+            # 将合并后的代码推送到你的 fork 仓库
+            git push origin $BRANCH
+            
+            # 输出完成消息
+            echo "✅ Sync completed successfully for $BRANCH!"
+            
+            # 设置输出变量，表示同步成功
+            echo "success=true" >> $GITHUB_OUTPUT
+          else
+            # 如果合并失败（有冲突）
+            
+            # 输出警告消息
+            echo "⚠️ Merge conflict detected in $BRANCH"
+            
+            # 中止合并操作，恢复到合并前的状态
+            git merge --abort
+            
+            # 设置输出变量，表示同步失败
+            echo "success=false" >> $GITHUB_OUTPUT
+            
+            # 退出并返回错误代码 1，触发 failure() 条件
+            exit 1
+          fi
+      
+      # 步骤 5：如果有冲突，创建 Pull Request
+      # if: failure() 表示只有在前面的步骤失败时才执行
+      - name: Create Pull Request on conflict
+        if: failure()
+        
+        # 使用第三方 action 来创建 PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          # 使用 GitHub token 进行身份验证
+          token: ${{ secrets.GITHUB_TOKEN }}
+          
+          # PR 的提交消息
+          commit-message: "chore: sync ${{ matrix.branch }} with upstream"
+          
+          # PR 的标题，包含分支名
+          title: "🔄 Sync ${{ matrix.branch }} with upstream (manual merge required)"
+          
+          # PR 的描述内容（使用多行字符串）
+          body: |
+            自动同步上游仓库到 `${{ matrix.branch }}` 分支时检测到冲突，需要手动解决。
+            
+            **分支**: `${{ matrix.branch }}`  
+            **上游仓库**: https://github.com/cline/cline
+            
+            ### 如何解决冲突
+            
+            ```bash
+            # 切换到冲突分支
+            git checkout ${{ matrix.branch }}
+            git pull origin ${{ matrix.branch }}
+            
+            # 添加上游仓库（如果还没添加）
+            git remote add upstream https://github.com/cline/cline.git
+            git fetch upstream
+            
+            # 合并上游更新
+            git merge upstream/main
+            
+            # 解决冲突后
+            git add .
+            git commit -m "chore: resolve merge conflicts with upstream"
+            git push origin ${{ matrix.branch }}
+            ```
+            
+            解决冲突后请关闭此 PR。
+          
+          # PR 使用的分支名，包含原分支名以避免冲突
+          branch: sync-${{ matrix.branch }}-conflict
+          
+          # PR 合并或关闭后自动删除这个临时分支
+          delete-branch: true
