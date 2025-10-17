@@ -96,6 +96,7 @@ export interface ApiHandlerOptions {
 	claudeCodePath?: string
 	vertexProjectId?: string
 	vertexRegion?: string
+	vertexUse1MContext?: boolean
 	openAiBaseUrl?: string
 	ollamaBaseUrl?: string
 	ollamaApiOptionsCtxNum?: string
@@ -682,6 +683,19 @@ export const vertexModels = {
 		cacheWritesPrice: 3.75,
 		cacheReadsPrice: 0.3,
 	},
+	"claude-sonnet-4-5@20250929:1m": {
+		maxTokens: 8192,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsGlobalEndpoint: true,
+		inputPrice: 3.0,
+		outputPrice: 15.0,
+		cacheWritesPrice: 3.75,
+		cacheReadsPrice: 0.3,
+		tiers: CLAUDE_SONNET_1M_TIERS,
+		description: "Claude Sonnet 4.5 with 1M context window (beta). Requires usage tier 4.",
+	},
 	"claude-sonnet-4@20250514": {
 		maxTokens: 8192,
 		contextWindow: 200_000,
@@ -692,6 +706,19 @@ export const vertexModels = {
 		outputPrice: 15.0,
 		cacheWritesPrice: 3.75,
 		cacheReadsPrice: 0.3,
+	},
+	"claude-sonnet-4@20250514:1m": {
+		maxTokens: 8192,
+		contextWindow: 1_000_000,
+		supportsImages: true,
+		supportsPromptCache: true,
+		supportsGlobalEndpoint: true,
+		inputPrice: 3.0,
+		outputPrice: 15.0,
+		cacheWritesPrice: 3.75,
+		cacheReadsPrice: 0.3,
+		tiers: CLAUDE_SONNET_1M_TIERS,
+		description: "Claude Sonnet 4 with 1M context window (beta). Requires usage tier 4.",
 	},
 	"claude-opus-4-1@20250805": {
 		maxTokens: 8192,

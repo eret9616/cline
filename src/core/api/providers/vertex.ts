@@ -14,6 +14,7 @@ interface VertexHandlerOptions extends CommonApiHandlerOptions {
 	geminiApiKey?: string
 	geminiBaseUrl?: string
 	ulid?: string
+	vertexUse1MContext?: boolean // Enable 1M token context window (beta)
 }
 
 export class VertexHandler implements ApiHandler {
@@ -82,10 +83,27 @@ export class VertexHandler implements ApiHandler {
 			(modelId.includes("3-7") || modelId.includes("sonnet-4") || modelId.includes("opus-4")) &&
 			budget_tokens !== 0
 		)
+
+		// Prepare headers for 1M context window (beta)
+		// Check if model ID ends with :1m to enable 1M context
+		const headers: Record<string, string> = {}
+		const use1MContext = modelId.endsWith(":1m")
+
+		if (use1MContext) {
+			headers["anthropic-beta"] = "context-1m-2025-08-07"
+		}
+
+		// Remove :1m suffix from model ID for API call
+		// Vertex AI doesn't recognize the :1m suffix - it's only for UI display
+		const actualModelId = modelId.replace(":1m", "")
+
 		let stream
 
 		switch (modelId) {
+			case "claude-sonnet-4-5@20250929":
+			case "claude-sonnet-4-5@20250929:1m":
 			case "claude-sonnet-4@20250514":
+			case "claude-sonnet-4@20250514:1m":
 			case "claude-opus-4-1@20250805":
 			case "claude-opus-4@20250514":
 			case "claude-3-7-sonnet@20250219":
@@ -103,7 +121,7 @@ export class VertexHandler implements ApiHandler {
 				const secondLastMsgUserIndex = userMsgIndices[userMsgIndices.length - 2] ?? -1
 				stream = await clientAnthropic.beta.messages.create(
 					{
-						model: modelId,
+						model: actualModelId,
 						max_tokens: model.info.maxTokens || 8192,
 						thinking: reasoningOn ? { type: "enabled", budget_tokens: budget_tokens } : undefined,
 						temperature: reasoningOn ? undefined : 0,
@@ -157,14 +175,14 @@ export class VertexHandler implements ApiHandler {
 						stream: true,
 					},
 					{
-						headers: {},
+						headers: headers,
 					},
 				)
 				break
 			}
 			default: {
 				stream = await clientAnthropic.beta.messages.create({
-					model: modelId,
+					model: actualModelId,
 					max_tokens: model.info.maxTokens || 8192,
 					temperature: 0,
 					system: [
