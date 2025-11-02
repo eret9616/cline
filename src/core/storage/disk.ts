@@ -106,6 +106,17 @@ export async function ensureMcpServersDirectoryExists(): Promise<string> {
 	return mcpServersDir
 }
 
+export async function ensureHooksDirectoryExists(): Promise<string> {
+	const userDocumentsPath = await getDocumentsPath()
+	const clineHooksDir = path.join(userDocumentsPath, "Cline", "Hooks")
+	try {
+		await fs.mkdir(clineHooksDir, { recursive: true })
+	} catch (_error) {
+		return path.join(os.homedir(), "Documents", "Cline", "Hooks") // in case creating a directory in documents fails for whatever reason (e.g. permissions) - this is fine because we will fail gracefully with a path that does not exist
+	}
+	return clineHooksDir
+}
+
 export async function ensureSettingsDirectoryExists(): Promise<string> {
 	return getGlobalStorageDir("settings")
 }
@@ -325,6 +336,41 @@ export async function deleteRemoteConfigFromCache(organizationId: string): Promi
 	} catch (error) {
 		console.error("Failed to delete remote config from cache:", error)
 	}
+}
+
+/**
+ * Gets the path to the global hooks directory if it exists.
+ * Returns undefined if the directory doesn't exist.
+ */
+export async function getGlobalHooksDir(): Promise<string | undefined> {
+	const globalHooksDir = await ensureHooksDirectoryExists()
+	return (await isDirectory(globalHooksDir)) ? globalHooksDir : undefined
+}
+
+/**
+ * Gets the paths to all hooks directories to search for hooks, including:
+ * 1. The global hooks directory (if it exists)
+ * 2. Each workspace root's .clinerules/hooks directory (if they exist)
+ *
+ * Note: Hooks from different directories may be executed concurrently.
+ * No execution order is guaranteed between hooks from different directories.
+ * A workspace may not use hooks, and the resulting array will be empty. A
+ * multi-root workspace may have multiple hooks directories.
+ */
+export async function getAllHooksDirs(): Promise<string[]> {
+	const hooksDirs: string[] = []
+
+	// Add global hooks directory (if it exists)
+	const globalHooksDir = await getGlobalHooksDir()
+	if (globalHooksDir) {
+		hooksDirs.push(globalHooksDir)
+	}
+
+	// Add workspace hooks directories
+	const workspaceHooksDirs = await getWorkspaceHooksDirs()
+	hooksDirs.push(...workspaceHooksDirs)
+
+	return hooksDirs
 }
 
 /**

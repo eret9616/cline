@@ -33,6 +33,8 @@ export type Platform = "aix" | "darwin" | "freebsd" | "linux" | "openbsd" | "sun
 
 export const DEFAULT_PLATFORM = "unknown"
 
+export const COMMAND_CANCEL_TOKEN = "__cline_command_cancel__"
+
 export interface ExtensionState {
 	isNewUser: boolean
 	welcomeViewCompleted: boolean
@@ -59,7 +61,13 @@ export interface ExtensionState {
 	shellIntegrationTimeout: number
 	terminalReuseEnabled?: boolean
 	terminalOutputLineLimit: number
+	maxConsecutiveMistakes: number
+	subagentTerminalOutputLineLimit: number
 	defaultTerminalProfile?: string
+	vscodeTerminalExecutionMode: string
+	backgroundCommandRunning?: boolean
+	backgroundCommandTaskId?: string
+	lastCompletedCommandTs?: number
 	userInfo?: UserInfo
 	version: string
 	distinctId: string
@@ -85,8 +93,11 @@ export interface ExtensionState {
 	multiRootSetting: ClineFeatureSetting
 	lastDismissedInfoBannerVersion: number
 	lastDismissedModelBannerVersion: number
+	lastDismissedCliBannerVersion: number
 	hooksEnabled?: ClineFeatureSetting
 	remoteConfigSettings?: Partial<GlobalStateAndSettings>
+	subagentsEnabled?: boolean
+	nativeToolCallSetting?: ClineFeatureSetting
 }
 
 export interface ClineMessage {
@@ -99,6 +110,7 @@ export interface ClineMessage {
 	images?: string[]
 	files?: string[]
 	partial?: boolean
+	commandCompleted?: boolean
 	lastCheckpointHash?: string
 	isCheckpointCheckedOut?: boolean
 	isOperationOutsideWorkspace?: boolean
@@ -117,7 +129,6 @@ export type ClineAsk =
 	| "resume_task"
 	| "resume_completed_task"
 	| "mistake_limit_reached"
-	| "auto_approval_max_req_reached"
 	| "browser_action_launch"
 	| "use_mcp_server"
 	| "new_task"
@@ -141,6 +152,7 @@ export type ClineSay =
 	| "command_output"
 	| "tool"
 	| "shell_integration_warning"
+	| "shell_integration_warning_with_suggestion"
 	| "browser_action_launch"
 	| "browser_action"
 	| "browser_action_result"
@@ -155,6 +167,8 @@ export type ClineSay =
 	| "load_mcp_documentation"
 	| "info" // Added for general informational messages like retry status
 	| "task_progress"
+	| "hook"
+	| "hook_output"
 
 export interface ClineSayTool {
 	tool:
@@ -173,6 +187,34 @@ export interface ClineSayTool {
 	regex?: string
 	filePattern?: string
 	operationIsLocatedInWorkspace?: boolean
+}
+
+export interface ClineSayHook {
+	hookName: string // Name of the hook (e.g., "PreToolUse", "PostToolUse")
+	toolName?: string // Tool name if applicable (for PreToolUse/PostToolUse)
+	status: "running" | "completed" | "failed" | "cancelled" // Execution status
+	exitCode?: number // Exit code when completed
+	hasJsonResponse?: boolean // Whether a JSON response was parsed
+	// Pending tool information (only present during PreToolUse "running" status)
+	pendingToolInfo?: {
+		tool: string // Tool name (e.g., "write_to_file", "execute_command")
+		path?: string // File path for file operations
+		command?: string // Command for execute_command
+		content?: string // Content preview (first 200 chars)
+		diff?: string // Diff preview (first 200 chars)
+		regex?: string // Regex pattern for search_files
+		url?: string // URL for web_fetch or browser_action
+		mcpTool?: string // MCP tool name
+		mcpServer?: string // MCP server name
+		resourceUri?: string // MCP resource URI
+	}
+	// Structured error information (only present when status is "failed")
+	error?: {
+		type: "timeout" | "validation" | "execution" | "cancellation" // Type of error
+		message: string // User-friendly error message
+		details?: string // Technical details for expansion
+		scriptPath?: string // Path to the hook script
+	}
 }
 
 // must keep in sync with system prompt
