@@ -1,11 +1,12 @@
-import { Anthropic } from "@anthropic-ai/sdk"
 import { Tool as AnthropicTool } from "@anthropic-ai/sdk/resources/index"
 import { AnthropicVertex } from "@anthropic-ai/vertex-sdk"
 import { FunctionDeclaration as GoogleTool } from "@google/genai"
 import { ModelInfo, VertexModelId, vertexDefaultModelId, vertexModels } from "@shared/api"
+import { ClineStorageMessage } from "@/shared/messages/content"
 import { ClineTool } from "@/shared/tools"
 import { ApiHandler, CommonApiHandlerOptions } from "../"
 import { withRetry } from "../retry"
+import { sanitizeAnthropicMessages } from "../transform/anthropic-format"
 import { ApiStream } from "../transform/stream"
 import { GeminiHandler } from "./gemini"
 
@@ -67,7 +68,7 @@ export class VertexHandler implements ApiHandler {
 	}
 
 	@withRetry()
-	async *createMessage(systemPrompt: string, messages: Anthropic.Messages.MessageParam[], tools?: ClineTool[]): ApiStream {
+	async *createMessage(systemPrompt: string, messages: ClineStorageMessage[], tools?: ClineTool[]): ApiStream {
 		const model = this.getModel()
 		const modelId = model.id
 
@@ -138,46 +139,7 @@ export class VertexHandler implements ApiHandler {
 								cache_control: { type: "ephemeral" },
 							},
 						],
-						messages: messages.map((message, index) => {
-							if (index === lastUserMsgIndex || index === secondLastMsgUserIndex) {
-								return {
-									...message,
-									content:
-										typeof message.content === "string"
-											? [
-													{
-														type: "text",
-														text: message.content,
-														cache_control: {
-															type: "ephemeral",
-														},
-													},
-												]
-											: message.content.map((content, contentIndex) =>
-													contentIndex === message.content.length - 1
-														? {
-																...content,
-																cache_control: {
-																	type: "ephemeral",
-																},
-															}
-														: content,
-												),
-								}
-							}
-							return {
-								...message,
-								content:
-									typeof message.content === "string"
-										? [
-												{
-													type: "text",
-													text: message.content,
-												},
-											]
-										: message.content,
-							}
-						}),
+						messages: sanitizeAnthropicMessages(messages, lastUserMsgIndex, secondLastMsgUserIndex),
 						stream: true,
 						tools: tools?.length ? (tools as AnthropicTool[]) : undefined,
 						// tool_choice options:
@@ -203,18 +165,7 @@ export class VertexHandler implements ApiHandler {
 							type: "text",
 						},
 					],
-					messages: messages.map((message) => ({
-						...message,
-						content:
-							typeof message.content === "string"
-								? [
-										{
-											type: "text",
-											text: message.content,
-										},
-									]
-								: message.content,
-					})),
+					messages: sanitizeAnthropicMessages(messages),
 					stream: true,
 					tools: tools?.length ? (tools as AnthropicTool[]) : undefined,
 					// tool_choice options:
@@ -231,7 +182,7 @@ export class VertexHandler implements ApiHandler {
 
 		for await (const chunk of stream) {
 			switch (chunk?.type) {
-				case "message_start":
+				case "message_start": {
 					const usage = chunk.message.usage
 					yield {
 						type: "usage",
@@ -241,6 +192,7 @@ export class VertexHandler implements ApiHandler {
 						cacheReadTokens: usage.cache_read_input_tokens || undefined,
 					}
 					break
+				}
 				case "message_delta":
 					yield {
 						type: "usage",
