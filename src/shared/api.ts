@@ -852,7 +852,6 @@ export const vertexModels = {
 		cacheWritesPrice: 3.75,
 		cacheReadsPrice: 0.3,
 		tiers: CLAUDE_SONNET_1M_TIERS,
-		description: "Claude Sonnet 4.5 with 1M context window (beta). Requires usage tier 4.",
 	},
 	"claude-sonnet-4@20250514": {
 		maxTokens: 8192,
@@ -876,7 +875,6 @@ export const vertexModels = {
 		cacheWritesPrice: 3.75,
 		cacheReadsPrice: 0.3,
 		tiers: CLAUDE_SONNET_1M_TIERS,
-		description: "Claude Sonnet 4 with 1M context window (beta). Requires usage tier 4.",
 	},
 	"claude-opus-4-1@20250805": {
 		maxTokens: 8192,
