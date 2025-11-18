@@ -13,15 +13,15 @@ import { getGitDiff } from "@/utils/git"
 let commitGenerationAbortController: AbortController | undefined
 
 const PROMPT = {
-	system: "You are a helpful assistant that generates informative git commit messages based on git diffs output. Skip preamble and remove all backticks surrounding the commit message.",
-	user: "Notes from developer (ignore if not relevant): {{USER_CURRENT_INPUT}}",
-	instruction: `Based on the provided git diff, generate a concise and descriptive commit message.
+	system: "你是一个帮助生成 git commit 消息的助手。基于 git diff 输出生成简洁的中文 commit 消息。直接输出 commit 消息，不要有任何前言或反引号。",
+	user: "开发者备注（如果不相关请忽略）：{{USER_CURRENT_INPUT}}",
+	instruction: `基于提供的 git diff，生成一个简短的 commit 标题。
 
-The commit message should:
-1. Has a short title (50-72 characters)
-2. The commit message should adhere to the conventional commit format
-3. Describe what was changed and why
-4. Be clear and informative`,
+要求：
+1. 只需要一行简短的标题（不超过 50 个字符）
+2. 使用中文
+3. 遵循 conventional commit 格式（如：feat: 添加新功能）
+4. 简洁明了地描述改动内容`,
 }
 
 export async function generateCommitMsg(stateManager: StateManager, scm?: vscode.SourceControl) {
