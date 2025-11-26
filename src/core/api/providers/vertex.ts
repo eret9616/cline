@@ -111,6 +111,7 @@ export class VertexHandler implements ApiHandler {
 			case "claude-sonnet-4-5@20250929:1m":
 			case "claude-sonnet-4@20250514":
 			case "claude-sonnet-4@20250514:1m":
+			case "claude-opus-4-5@20251101":
 			case "claude-opus-4-1@20250805":
 			case "claude-opus-4@20250514":
 			case "claude-3-7-sonnet@20250219":
@@ -119,13 +120,6 @@ export class VertexHandler implements ApiHandler {
 			case "claude-3-5-haiku@20241022":
 			case "claude-3-opus@20240229":
 			case "claude-3-haiku@20240307": {
-				// Find indices of user messages for cache control
-				const userMsgIndices = messages.reduce(
-					(acc, msg, index) => (msg.role === "user" ? [...acc, index] : acc),
-					[] as number[],
-				)
-				const lastUserMsgIndex = userMsgIndices[userMsgIndices.length - 1] ?? -1
-				const secondLastMsgUserIndex = userMsgIndices[userMsgIndices.length - 2] ?? -1
 				stream = await clientAnthropic.beta.messages.create(
 					{
 						model: actualModelId,
@@ -139,7 +133,7 @@ export class VertexHandler implements ApiHandler {
 								cache_control: { type: "ephemeral" },
 							},
 						],
-						messages: sanitizeAnthropicMessages(messages, lastUserMsgIndex, secondLastMsgUserIndex),
+						messages: sanitizeAnthropicMessages(messages, true),
 						stream: true,
 						tools: tools?.length ? (tools as AnthropicTool[]) : undefined,
 						// tool_choice options:
@@ -165,7 +159,7 @@ export class VertexHandler implements ApiHandler {
 							type: "text",
 						},
 					],
-					messages: sanitizeAnthropicMessages(messages),
+					messages: sanitizeAnthropicMessages(messages, false),
 					stream: true,
 					tools: tools?.length ? (tools as AnthropicTool[]) : undefined,
 					// tool_choice options:
