@@ -18,6 +18,7 @@ interface VertexHandlerOptions extends CommonApiHandlerOptions {
 	geminiApiKey?: string
 	geminiBaseUrl?: string
 	ulid?: string
+	vertexUse1MContext?: boolean // Enable 1M token context window (beta)
 }
 
 export class VertexHandler implements ApiHandler {
@@ -56,7 +57,7 @@ export class VertexHandler implements ApiHandler {
 				// Initialize Anthropic client for Claude models
 				this.clientAnthropic = new AnthropicVertex({
 					projectId: this.options.vertexProjectId,
-					// https://cloud.google.com/vertex-ai/generative-ai/docs/partner-models/use-claude#regions
+					// https://cloud.google.com/vertex-ai/generative-ai/docs/partner-models/claude/use-claude#use_the_anthropic_sdk
 					region: this.options.vertexRegion,
 				})
 			} catch (error: any) {
@@ -89,12 +90,27 @@ export class VertexHandler implements ApiHandler {
 				modelId.includes("haiku-4-5")) &&
 			budget_tokens !== 0
 		)
+
+		// Prepare headers for 1M context window (beta)
+		// Check if model ID ends with :1m to enable 1M context
+		const headers: Record<string, string> = {}
+		const use1MContext = modelId.endsWith(":1m")
+
+		if (use1MContext) {
+			headers["anthropic-beta"] = "context-1m-2025-08-07"
+		}
+
+		// Remove :1m suffix from model ID for API call
+		// Vertex AI doesn't recognize the :1m suffix - it's only for UI display
+		const actualModelId = modelId.replace(":1m", "")
+
 		let stream
 
 		switch (modelId) {
-			case "claude-haiku-4-5@20251001":
 			case "claude-sonnet-4-5@20250929":
+			case "claude-sonnet-4-5@20250929:1m":
 			case "claude-sonnet-4@20250514":
+			case "claude-sonnet-4@20250514:1m":
 			case "claude-opus-4-5@20251101":
 			case "claude-opus-4-1@20250805":
 			case "claude-opus-4@20250514":
@@ -106,7 +122,7 @@ export class VertexHandler implements ApiHandler {
 			case "claude-3-haiku@20240307": {
 				stream = await clientAnthropic.beta.messages.create(
 					{
-						model: modelId,
+						model: actualModelId,
 						max_tokens: model.info.maxTokens || 8192,
 						thinking: reasoningOn ? { type: "enabled", budget_tokens: budget_tokens } : undefined,
 						temperature: reasoningOn ? undefined : 0,
@@ -127,14 +143,14 @@ export class VertexHandler implements ApiHandler {
 						tool_choice: tools ? { type: "any" } : undefined,
 					},
 					{
-						headers: {},
+						headers: headers,
 					},
 				)
 				break
 			}
 			default: {
 				stream = await clientAnthropic.beta.messages.create({
-					model: modelId,
+					model: actualModelId,
 					max_tokens: model.info.maxTokens || 8192,
 					temperature: 0,
 					system: [
